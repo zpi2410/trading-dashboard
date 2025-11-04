@@ -215,3 +215,9 @@ __marimo__/
 test_nyse.py
 scripts/fetch_nyse_tickers.py
 .claude/
+
+# Project specific files
+.rate_limit_state.json
+*.bat
+*.ps1
+python_installer.py
