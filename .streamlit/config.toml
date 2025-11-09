@@ -1,0 +1,16 @@
+[theme]
+# Primary colors
+primaryColor = "#00D9FF"  # Bright cyan for accents
+backgroundColor = "#0E1117"  # Dark background
+secondaryBackgroundColor = "#1A1D29"  # Slightly lighter dark
+textColor = "#FAFAFA"  # Off-white text
+
+# Font
+font = "sans-serif"
+
+[server]
+headless = true
+port = 8501
+
+[browser]
+gatherUsageStats = false

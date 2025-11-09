@@ -18,11 +18,13 @@ sys.path.insert(0, src_dir)
 
 # Import the analysis functions
 from btc_analysis import analyze_btc_daily, get_analysis_with_retry
+from coingecko_data import get_top_gainers_losers
+from strategy_templates import STRATEGY_TEMPLATES, get_strategy_recommendation, GLOBAL_DISCLAIMER
 
 # Page configuration
 st.set_page_config(
-    page_title="BTC/USD Trading Dashboard",
-    page_icon="₿",
+    page_title="Crypto Trading Dashboard",
+    page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -56,25 +58,26 @@ def save_rate_limit_state(timestamp):
     except:
         pass
 
-def create_price_chart(result):
+def create_price_chart(result, asset_info):
     """Create an interactive price chart with technical indicators"""
     try:
         import yfinance as yf
 
-        # Fetch BTC-USD data for last 90 days
-        btc = yf.Ticker("BTC-USD")
-        df = btc.history(period="90d", interval="1d")
+        # Fetch crypto data for last 90 days using the selected asset
+        ticker = yf.Ticker(asset_info["yf_symbol"])
+        df = ticker.history(period="90d", interval="1d")
 
         if df.empty:
             return None
 
         # Create figure with secondary y-axis
+        asset_pair = f"{asset_info['symbol']}/USD"
         fig = make_subplots(
             rows=2, cols=1,
             shared_xaxes=True,
             vertical_spacing=0.03,
             row_heights=[0.7, 0.3],
-            subplot_titles=('BTC/USD Price with Technical Indicators', 'Volume')
+            subplot_titles=(f'{asset_pair} Price with Technical Indicators', 'Volume')
         )
 
         # Add candlestick chart
@@ -85,7 +88,7 @@ def create_price_chart(result):
                 high=df['High'],
                 low=df['Low'],
                 close=df['Close'],
-                name='BTC/USD',
+                name=asset_pair,
                 increasing_line_color='#26a69a',
                 decreasing_line_color='#ef5350'
             ),
@@ -188,7 +191,7 @@ def create_price_chart(result):
 
         # Update layout
         fig.update_layout(
-            title='BTC/USD - 90 Day Chart with Technical Indicators',
+            title=f'{asset_pair} - 90 Day Chart with Technical Indicators',
             yaxis_title='Price (USD)',
             yaxis2_title='Volume',
             xaxis_rangeslider_visible=False,
@@ -230,8 +233,58 @@ if 'cooldown_seconds' not in st.session_state:
 
 # Sidebar
 with st.sidebar:
-    st.markdown("# ₿")
-    st.title("BTC/USD Analysis")
+    st.markdown("# 💰")
+    st.title("Crypto Analysis")
+    st.markdown("---")
+
+    # Asset Selection
+    st.subheader("📊 Asset Selection")
+
+    # Asset dropdown with emoji icons
+    asset_options = {
+        "Bitcoin (BTC)": {"symbol": "BTC", "yf_symbol": "BTC-USD", "tv_symbol": "COINBASE:BTCUSD", "emoji": "₿"},
+        "Ethereum (ETH)": {"symbol": "ETH", "yf_symbol": "ETH-USD", "tv_symbol": "COINBASE:ETHUSD", "emoji": "⧫"},
+        "Solana (SOL)": {"symbol": "SOL", "yf_symbol": "SOL-USD", "tv_symbol": "COINBASE:SOLUSD", "emoji": "◎"}
+    }
+
+    selected_asset_name = st.selectbox(
+        "Select Cryptocurrency",
+        list(asset_options.keys()),
+        index=0,
+        help="Choose which cryptocurrency to analyze"
+    )
+
+    # Store selected asset details in session state
+    st.session_state.selected_asset = asset_options[selected_asset_name]
+
+    st.markdown("---")
+
+    # Educational Strategy Templates
+    st.subheader("📚 Strategy Templates (Educational)")
+
+    strategy_names = {
+        "None": "None (Technical Analysis Only)",
+        "trend_following": "Trend Following (Golden Cross)",
+        "mean_reversion": "Mean Reversion (RSI + BB)",
+        "breakout": "Breakout Trading (Volume)",
+        "momentum": "Momentum Trading (MACD)"
+    }
+
+    selected_strategy = st.selectbox(
+        "Compare with Strategy:",
+        list(strategy_names.keys()),
+        format_func=lambda x: strategy_names[x],
+        index=0,
+        help="⚠️ FOR EDUCATIONAL PURPOSES ONLY - Compare your analysis with common trading strategies"
+    )
+
+    # Store in session state
+    st.session_state.selected_strategy = selected_strategy
+
+    # Show prominent warning if strategy is selected
+    if selected_strategy != "None":
+        st.warning("⚠️ EDUCATIONAL ONLY - NOT financial advice!")
+
     st.markdown("---")
 
     # Appearance Settings
@@ -385,143 +438,159 @@ font_mapping = {
     "Monospace": "monospace"
 }
 
-# Fixed Light theme
-selected_theme = {
-    "bg_color": "#ffffff",
-    "text_color": "#0e1117",
-    "secondary_bg": "#f0f2f6",
-    "border_color": "#e6e6e6"
-}
-
 selected_font = font_mapping[font_family]
 
 custom_css = f"""
     <style>
+    /* Import Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
     /* Apply font globally */
     html, body, [class*="css"] {{
-        font-family: {selected_font} !important;
+        font-family: {selected_font}, 'Inter', sans-serif !important;
     }}
 
-    /* Apply theme colors */
+    /* Main app background with gradient */
     .stApp {{
-        background-color: {selected_theme['bg_color']} !important;
+        background: linear-gradient(135deg, #0E1117 0%, #1A1D29 100%);
     }}
 
     /* Main content area */
     .main .block-container {{
-        background-color: {selected_theme['bg_color']} !important;
-        color: {selected_theme['text_color']} !important;
+        padding-top: 2rem;
+        max-width: 1400px;
     }}
 
-    /* Sidebar */
+    /* Sidebar with modern styling */
     [data-testid="stSidebar"] {{
-        background-color: {selected_theme['secondary_bg']} !important;
+        background: linear-gradient(180deg, #1A1D29 0%, #0E1117 100%);
+        border-right: 1px solid rgba(0, 217, 255, 0.1);
     }}
 
-    [data-testid="stSidebar"] * {{
-        color: {selected_theme['text_color']} !important;
+    /* Headers with gradient text */
+    h1, h2, h3 {{
+        background: linear-gradient(135deg, #00D9FF 0%, #00A3CC 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 700 !important;
     }}
 
-    /* Headers */
-    h1, h2, h3, h4, h5, h6 {{
-        color: {selected_theme['text_color']} !important;
-        font-family: {selected_font} !important;
-    }}
-
-    /* Text elements */
-    p, span, div, label {{
-        color: {selected_theme['text_color']} !important;
-    }}
-
-    /* Metrics */
+    /* Metric cards with glass morphism */
     [data-testid="stMetric"] {{
-        background-color: {selected_theme['secondary_bg']} !important;
-        border: 1px solid {selected_theme['border_color']} !important;
-        border-radius: 8px !important;
-        padding: 10px !important;
+        background: rgba(26, 29, 41, 0.6);
+        border: 1px solid rgba(0, 217, 255, 0.2);
+        border-radius: 12px;
+        padding: 16px;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px 0 rgba(0, 217, 255, 0.1);
+        transition: all 0.3s ease;
     }}
 
-    [data-testid="stMetricLabel"], [data-testid="stMetricValue"] {{
-        color: {selected_theme['text_color']} !important;
+    [data-testid="stMetric"]:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px 0 rgba(0, 217, 255, 0.2);
+        border-color: rgba(0, 217, 255, 0.4);
     }}
 
-    /* Buttons */
+    [data-testid="stMetricValue"] {{
+        color: #00D9FF !important;
+        font-weight: 700;
+        font-size: 1.8rem;
+    }}
+
+    [data-testid="stMetricLabel"] {{
+        color: #B8B8C4 !important;
+        font-weight: 500;
+    }}
+
+    /* Primary button with neon glow */
+    .stButton > button[kind="primary"] {{
+        background: linear-gradient(135deg, #00D9FF 0%, #0099CC 100%);
+        color: #0E1117;
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem 2rem;
+        font-weight: 600;
+        box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+        transition: all 0.3s ease;
+    }}
+
+    .stButton > button[kind="primary"]:hover {{
+        box-shadow: 0 0 30px rgba(0, 217, 255, 0.6);
+        transform: translateY(-2px);
+    }}
+
+    /* Regular buttons */
     .stButton > button {{
-        background-color: {selected_theme['secondary_bg']} !important;
-        color: {selected_theme['text_color']} !important;
-        border: 1px solid {selected_theme['border_color']} !important;
-        font-family: {selected_font} !important;
+        background: rgba(26, 29, 41, 0.8);
+        color: #FAFAFA;
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 8px;
+        padding: 0.6rem 1.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
     }}
 
     .stButton > button:hover {{
-        border-color: {selected_theme['text_color']} !important;
+        background: rgba(0, 217, 255, 0.1);
+        border-color: #00D9FF;
     }}
 
-    /* Expanders */
+    /* Expander with modern styling */
     .streamlit-expanderHeader {{
-        background-color: {selected_theme['secondary_bg']} !important;
-        color: {selected_theme['text_color']} !important;
-        border: 1px solid {selected_theme['border_color']} !important;
-        font-family: {selected_font} !important;
-    }}
-
-    /* Tables */
-    table {{
-        color: {selected_theme['text_color']} !important;
-        background-color: {selected_theme['bg_color']} !important;
-    }}
-
-    th, td {{
-        color: {selected_theme['text_color']} !important;
-        border-color: {selected_theme['border_color']} !important;
-    }}
-
-    /* Info/Warning/Success boxes */
-    .stAlert {{
-        background-color: {selected_theme['secondary_bg']} !important;
-        border: 1px solid {selected_theme['border_color']} !important;
-        color: {selected_theme['text_color']} !important;
-    }}
-
-    /* Select boxes and inputs */
-    .stSelectbox, .stNumberInput {{
-        color: {selected_theme['text_color']} !important;
-    }}
-
-    /* Progress bars */
-    .stProgress > div > div {{
-        background-color: {selected_theme['border_color']} !important;
-    }}
-
-    /* Custom styling */
-    .big-font {{
-        font-size: 20px !important;
-        font-weight: bold;
-    }}
-
-    .metric-card {{
-        background-color: {selected_theme['secondary_bg']} !important;
-        padding: 20px;
+        background: rgba(26, 29, 41, 0.6);
+        border: 1px solid rgba(0, 217, 255, 0.2);
         border-radius: 10px;
-        border-left: 5px solid {selected_theme['border_color']};
+        color: #FAFAFA !important;
+        font-weight: 600;
+        padding: 1rem;
+        transition: all 0.3s ease;
     }}
 
+    .streamlit-expanderHeader:hover {{
+        background: rgba(26, 29, 41, 0.9);
+        border-color: rgba(0, 217, 255, 0.4);
+    }}
+
+    /* Info/Success/Warning boxes */
+    .stAlert {{
+        background: rgba(26, 29, 41, 0.8);
+        border-left: 4px solid #00D9FF;
+        border-radius: 8px;
+        backdrop-filter: blur(10px);
+    }}
+
+    /* Progress bars with gradient */
+    .stProgress > div > div {{
+        background: linear-gradient(90deg, #00D9FF 0%, #0099CC 100%);
+    }}
+
+    /* Select boxes */
+    .stSelectbox {{
+        background: rgba(26, 29, 41, 0.6);
+        border-radius: 8px;
+    }}
+
+    /* Custom color classes */
     .bullish {{
-        color: #00ff00 !important;
+        color: #00FF88 !important;
         font-weight: bold;
+        text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
     }}
 
     .bearish {{
-        color: #ff0000 !important;
+        color: #FF4444 !important;
         font-weight: bold;
+        text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
     }}
 
     .neutral {{
-        color: #ffaa00 !important;
+        color: #FFAA00 !important;
         font-weight: bold;
     }}
 
-    /* Animated Title */
+    /* Animated Title with gradient */
     @keyframes slideInFromLeft {{
         0% {{
             opacity: 0;
@@ -533,13 +602,27 @@ custom_css = f"""
         }}
     }}
 
+    @keyframes glow {{
+        0%, 100% {{
+            text-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
+        }}
+        50% {{
+            text-shadow: 0 0 40px rgba(0, 217, 255, 0.8);
+        }}
+    }}
+
     .animated-title {{
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
-        font-size: 3rem;
-        font-weight: 700;
+        gap: 16px;
+        font-size: 3.5rem;
+        font-weight: 800;
         margin-bottom: 1rem;
+        background: linear-gradient(135deg, #00D9FF 0%, #FFFFFF 50%, #00A3CC 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: glow 3s ease-in-out infinite;
     }}
 
     .animated-title span {{
@@ -554,27 +637,133 @@ custom_css = f"""
     .animated-title span:nth-child(4) {{ animation-delay: 0.45s; }}
 
     .subtitle {{
-        font-size: 1.2rem;
-        color: #666;
+        font-size: 1.3rem;
+        color: #B8B8C4;
         margin-bottom: 2rem;
         opacity: 0;
         animation: slideInFromLeft 0.6s ease-out 0.6s forwards;
+        font-weight: 400;
+    }}
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {{
+        width: 8px;
+        height: 8px;
+    }}
+
+    ::-webkit-scrollbar-track {{
+        background: #1A1D29;
+    }}
+
+    ::-webkit-scrollbar-thumb {{
+        background: linear-gradient(180deg, #00D9FF 0%, #0099CC 100%);
+        border-radius: 4px;
+    }}
+
+    ::-webkit-scrollbar-thumb:hover {{
+        background: #00D9FF;
+    }}
+
+    /* Chart containers */
+    .js-plotly-plot {{
+        border-radius: 12px;
+        box-shadow: 0 8px 32px 0 rgba(0, 217, 255, 0.1);
+    }}
+
+    /* Add subtle animations to all cards */
+    div[data-testid="stVerticalBlock"] > div {{
+        animation: fadeIn 0.5s ease-in;
+    }}
+
+    @keyframes fadeIn {{
+        from {{ opacity: 0; transform: translateY(10px); }}
+        to {{ opacity: 1; transform: translateY(0); }}
     }}
     </style>
 """
 
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# Main content with animated title
-st.markdown("""
+# Main content with animated title - dynamic based on selected asset
+if 'selected_asset' in st.session_state:
+    asset_info = st.session_state.selected_asset
+    asset_name = selected_asset_name.split(' (')[0]  # Extract "Bitcoin" from "Bitcoin (BTC)"
+    asset_emoji = asset_info['emoji']
+    asset_pair = f"{asset_info['symbol']}/USD"
+else:
+    # Default to Bitcoin if not yet selected
+    asset_name = "Bitcoin"
+    asset_emoji = "₿"
+    asset_pair = "BTC/USD"
+
+st.markdown(f"""
     <div class="animated-title">
-        <span>₿</span>
-        <span>Bitcoin</span>
+        <span>{asset_emoji}</span>
+        <span>{asset_name}</span>
         <span>Trading</span>
         <span>Dashboard</span>
     </div>
-    <div class="subtitle">Real-time Technical Analysis for BTC/USD on Coinbase</div>
+    <div class="subtitle">Real-time Technical Analysis for {asset_pair} on Coinbase</div>
 """, unsafe_allow_html=True)
+
+# Market Overview - Top Gainers & Losers
+with st.expander("📊 Market Overview - Top Gainers & Losers (Top 500 Coins)", expanded=False):
+    # Cache the data for 5 minutes to avoid rate limiting
+    @st.cache_data(ttl=300)
+    def fetch_gainers_losers():
+        return get_top_gainers_losers(10)
+
+    with st.spinner("🔍 Fetching top gainers and losers from CoinGecko..."):
+        market_data = fetch_gainers_losers()
+
+    if market_data.get('error'):
+        st.error(f"❌ {market_data['error']}")
+    else:
+        st.success(f"✅ Analyzed {market_data['total_coins']} coins from top 500")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("### 🔥 Top 10 Gainers (24h)")
+            for i, coin in enumerate(market_data['gainers'], 1):
+                change_color = "green" if coin['change_24h'] > 0 else "red"
+                st.markdown(f"""
+                <div style='background-color: rgba(0, 255, 0, 0.05); padding: 10px; border-radius: 5px; border-left: 3px solid green; margin-bottom: 8px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <div>
+                            <strong>{i}. {coin['symbol']}</strong> - {coin['name'][:20]}
+                            <br><small>Rank #{coin['market_cap_rank']}</small>
+                        </div>
+                        <div style='text-align: right;'>
+                            <div style='font-size: 14px;'>${coin['price']:,.8f}</div>
+                            <div style='color: {change_color}; font-weight: bold; font-size: 16px;'>+{coin['change_24h']:.2f}%</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("### ❄️ Top 10 Losers (24h)")
+            for i, coin in enumerate(market_data['losers'], 1):
+                change_color = "red" if coin['change_24h'] < 0 else "green"
+                st.markdown(f"""
+                <div style='background-color: rgba(255, 0, 0, 0.05); padding: 10px; border-radius: 5px; border-left: 3px solid red; margin-bottom: 8px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <div>
+                            <strong>{i}. {coin['symbol']}</strong> - {coin['name'][:20]}
+                            <br><small>Rank #{coin['market_cap_rank']}</small>
+                        </div>
+                        <div style='text-align: right;'>
+                            <div style='font-size: 14px;'>${coin['price']:,.8f}</div>
+                            <div style='color: {change_color}; font-weight: bold; font-size: 16px;'>{coin['change_24h']:.2f}%</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        st.info("💡 **Tip:** This data is cached for 5 minutes to respect CoinGecko's rate limits. Data source: CoinGecko API")
+
+st.markdown("---")
 
 # Calculate time since last analysis
 import time as time_module
@@ -620,7 +809,12 @@ result = None
 
 if should_run:
     with st.spinner("🔍 Fetching data from TradingView..."):
-        result = analyze_btc_daily()
+        # Get the selected asset info
+        asset_info = st.session_state.selected_asset
+        result = analyze_btc_daily(
+            symbol=asset_info['tv_symbol'],
+            asset_name=f"{asset_info['symbol']}/USD"
+        )
         # Cache the result
         st.session_state.cached_result = result
 
@@ -696,7 +890,8 @@ if result:
     if show_chart:
         st.markdown("### 📈 Price Chart (90 Days)")
         with st.spinner("📊 Loading price chart..."):
-            chart = create_price_chart(result)
+            asset_info = st.session_state.selected_asset
+            chart = create_price_chart(result, asset_info)
             if chart:
                 st.plotly_chart(chart, use_container_width=True)
             else:
@@ -708,6 +903,8 @@ if result:
     st.markdown("### 📊 Price Data")
     col1, col2, col3, col4 = st.columns(4)
 
+    asset_symbol = st.session_state.selected_asset['symbol']
+
     with col1:
         st.metric("Open", f"${result['open']:,.2f}")
     with col2:
@@ -715,7 +912,7 @@ if result:
     with col3:
         st.metric("Low", f"${result['low']:,.2f}")
     with col4:
-        st.metric("Volume (24h)", f"{result['volume']:,.0f} BTC")
+        st.metric("Volume (24h)", f"{result['volume']:,.0f} {asset_symbol}")
 
     st.markdown("---")
 
@@ -782,7 +979,7 @@ if result:
             rsi_emoji = "📉"
 
         st.metric("RSI (14)", f"{result['rsi']:.2f}", delta=rsi_emoji)
-        st.markdown(f"<div style='background-color: {selected_theme['secondary_bg']}; padding: 8px; border-radius: 5px; border-left: 3px solid {rsi_color}; margin-bottom: 15px;'><small style='color: {rsi_color}; font-weight: 600;'>{rsi_signal}</small></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background-color: rgba(26, 29, 41, 0.8); padding: 8px; border-radius: 5px; border-left: 3px solid {rsi_color}; margin-bottom: 15px;'><small style='color: {rsi_color}; font-weight: 600;'>{rsi_signal}</small></div>", unsafe_allow_html=True)
 
         # MACD Box
         macd_div = result['macd'] - result['macd_signal']
@@ -792,7 +989,7 @@ if result:
 
         st.metric("MACD", f"{result['macd']:.2f}", delta=macd_emoji)
         st.markdown(f"""
-            <div style='background-color: {selected_theme['secondary_bg']}; padding: 8px; border-radius: 5px; border-left: 3px solid {macd_color}; margin-bottom: 15px;'>
+            <div style='background-color: rgba(26, 29, 41, 0.8); padding: 8px; border-radius: 5px; border-left: 3px solid {macd_color}; margin-bottom: 15px;'>
                 <small><strong>Signal:</strong> {result['macd_signal']:.2f}</small><br>
                 <small><strong>Divergence:</strong> {macd_div:.2f}</small><br>
                 <small style='color: {macd_color}; font-weight: 600;'>{macd_sig}</small>
@@ -815,7 +1012,7 @@ if result:
 
         st.metric("Stochastic K", f"{result['stoch_k']:.2f}", delta=stoch_emoji)
         st.markdown(f"""
-            <div style='background-color: {selected_theme['secondary_bg']}; padding: 8px; border-radius: 5px; border-left: 3px solid {stoch_color}; margin-bottom: 15px;'>
+            <div style='background-color: rgba(26, 29, 41, 0.8); padding: 8px; border-radius: 5px; border-left: 3px solid {stoch_color}; margin-bottom: 15px;'>
                 <small><strong>Stochastic D:</strong> {result['stoch_d']:.2f}</small><br>
                 <small style='color: {stoch_color}; font-weight: 600;'>{stoch_sig}</small>
             </div>
@@ -848,7 +1045,7 @@ if result:
 
         st.metric("Moving Averages", ma_trend, delta=ma_emoji)
         st.markdown(f"""
-            <div style='background-color: {selected_theme['secondary_bg']}; padding: 8px; border-radius: 5px; border-left: 3px solid {ma_color}; margin-bottom: 15px;'>
+            <div style='background-color: rgba(26, 29, 41, 0.8); padding: 8px; border-radius: 5px; border-left: 3px solid {ma_color}; margin-bottom: 15px;'>
                 <small><strong>SMA (20):</strong> ${result['sma20']:,.2f}</small><br>
                 <small><strong>EMA (50):</strong> ${result['ema50']:,.2f}</small><br>
                 <small><strong>EMA (200):</strong> ${result['ema200']:,.2f}</small><br>
@@ -871,7 +1068,7 @@ if result:
             adx_emoji = "🔴"
 
         st.metric("ADX (Trend Strength)", f"{result['adx']:.2f}", delta=adx_emoji)
-        st.markdown(f"<div style='background-color: {selected_theme['secondary_bg']}; padding: 8px; border-radius: 5px; border-left: 3px solid {adx_color}; margin-bottom: 15px;'><small style='color: {adx_color}; font-weight: 600;'>{trend_strength}</small></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background-color: rgba(26, 29, 41, 0.8); padding: 8px; border-radius: 5px; border-left: 3px solid {adx_color}; margin-bottom: 15px;'><small style='color: {adx_color}; font-weight: 600;'>{trend_strength}</small></div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -995,6 +1192,86 @@ if result:
 
         st.markdown("---")
 
+        # EDUCATIONAL STRATEGY COMPARISON
+        if st.session_state.get('selected_strategy', 'None') != 'None':
+            with st.expander("📚 Strategy Template Comparison (EDUCATIONAL ONLY)", expanded=True):
+                # PROMINENT DISCLAIMER
+                st.error("""
+                ⚠️⚠️⚠️ **DISCLAIMER: FOR EDUCATIONAL PURPOSES ONLY** ⚠️⚠️⚠️
+
+                **This is NOT financial advice. This is an educational comparison only.**
+
+                - Strategy templates show how different trading methodologies analyze data
+                - Past performance does NOT guarantee future results
+                - Most traders LOSE money - trading is extremely risky
+                - Never trade with money you cannot afford to lose
+                - Always do your own research (DYOR)
+                - Consult a licensed financial advisor before making trading decisions
+                - We accept NO responsibility for your trading decisions
+                """)
+
+                # Get strategy recommendation
+                strategy_comparison = get_strategy_recommendation(
+                    st.session_state.selected_strategy,
+                    result,  # All indicators
+                    result['price'],
+                    result['levels']
+                )
+
+                if strategy_comparison:
+                    st.markdown(f"### 📖 {strategy_comparison['name']}")
+
+                    # Strategy status
+                    if strategy_comparison['conditions_met']:
+                        st.success(f"✅ **Strategy Signal:** {strategy_comparison['signal']}")
+                    else:
+                        st.warning(f"⚠️ **Strategy Signal:** {strategy_comparison['signal']}")
+
+                    # Show reasoning
+                    st.markdown("**Strategy Analysis:**")
+                    for reason in strategy_comparison['reasoning']:
+                        st.write(f"  {reason}")
+
+                    st.markdown("---")
+
+                    # SIDE-BY-SIDE COMPARISON
+                    st.markdown("### 🔍 Comparison: Your Analysis vs Strategy Template")
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.markdown("#### 🔬 Your Technical Analysis")
+                        st.markdown(f"""
+                        <div style='background-color: rgba(0, 217, 255, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #00D9FF;'>
+                            <p style='margin: 5px 0;'><strong>📊 Entry:</strong> ${strategy_comparison['comparison']['your_entry']:,.2f}</p>
+                            <p style='margin: 5px 0;'><strong>🛑 Stop Loss:</strong> ${strategy_comparison['comparison']['your_stop']:,.2f}</p>
+                            <p style='margin: 5px 0;'><strong>🎯 Take Profit:</strong> ${strategy_comparison['comparison']['your_target']:,.2f}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.caption("Based on comprehensive technical indicator analysis")
+
+                    with col2:
+                        st.markdown(f"#### 📚 {strategy_comparison['name']}")
+                        st.markdown(f"""
+                        <div style='background-color: rgba(255, 165, 0, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid orange;'>
+                            <p style='margin: 5px 0;'><strong>📊 Entry:</strong> ${strategy_comparison['educational']['entry']:,.2f}</p>
+                            <p style='margin: 5px 0;'><strong>🛑 Stop Loss:</strong> ${strategy_comparison['educational']['stop_loss']:,.2f}</p>
+                            <p style='margin: 5px 0;'><strong>🎯 Take Profit:</strong> ${strategy_comparison['educational']['take_profit']:,.2f}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.caption("Educational example - see methodology below")
+
+                    st.markdown("---")
+
+                    # Strategy Methodology
+                    with st.expander("📖 Learn About This Strategy"):
+                        st.markdown(strategy_comparison['methodology'])
+
+                    # Strategy-specific disclaimer
+                    st.warning(strategy_comparison['disclaimer'])
+
+        st.markdown("---")
+
         # Support and Resistance Levels
         st.markdown("### 📍 Key Support & Resistance Levels")
 
@@ -1059,11 +1336,14 @@ if result:
         """)
 
 else:
-    # Welcome screen
-    st.info("""
-    👋 **Welcome to the BTC/USD Trading Dashboard!**
+    # Welcome screen - dynamic based on selected asset
+    asset_info = st.session_state.selected_asset if 'selected_asset' in st.session_state else {"symbol": "BTC"}
+    asset_pair = f"{asset_info['symbol']}/USD"
 
-    Click the **"🔄 Run Analysis"** button above to fetch the latest analysis from TradingView.
+    st.info(f"""
+    👋 **Welcome to the Crypto Trading Dashboard!**
+
+    Click the **"🔄 Run Analysis"** button above to fetch the latest analysis for {asset_pair} from TradingView.
 
     This dashboard provides:
     - Real-time price data and technical indicators

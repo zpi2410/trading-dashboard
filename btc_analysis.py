@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 BTC/USD Daily (24hr) Analysis on Coinbase
 Single timeframe technical analysis with entry/exit recommendations
@@ -9,6 +10,18 @@ import sys
 import os
 import time
 import json
+import io
+
+# Fix Windows console encoding issues
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        # Python < 3.7
+        import codecs
+        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
 # Add the source directory to Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -35,27 +48,27 @@ except ImportError:
 def get_analysis_with_retry(screener, interval, symbols, max_retries=3, delay=2):
     """
     Get analysis with retry logic and better error handling
-    
+
     Args:
         screener: TradingView screener type
         interval: Timeframe (1D for daily)
         symbols: List of symbols to analyze
         max_retries: Maximum number of retry attempts (default: 3)
         delay: Delay in seconds between retries (default: 2)
-    
+
     Returns:
         Analysis data or None on failure
     """
     for attempt in range(max_retries):
         try:
             print(f"  🔄 Fetching data (attempt {attempt + 1}/{max_retries})...", end=" ", flush=True)
-            
+
             analysis = get_multiple_analysis(
                 screener=screener,
                 interval=interval,
                 symbols=symbols
             )
-            
+
             # Check if we got valid data
             if analysis and symbols[0] in analysis and analysis[symbols[0]] is not None:
                 print("✅ Success")
@@ -67,7 +80,7 @@ def get_analysis_with_retry(screener, interval, symbols, max_retries=3, delay=2)
                     time.sleep(delay)
                     delay *= 1.5  # Exponential backoff
                 continue
-                
+
         except json.JSONDecodeError as e:
             print(f"❌ JSON Error")
             if attempt < max_retries - 1:
@@ -77,7 +90,7 @@ def get_analysis_with_retry(screener, interval, symbols, max_retries=3, delay=2)
             else:
                 print(f"  ❌ All retries exhausted. Error: {str(e)}")
                 return None
-                
+
         except ConnectionError as e:
             print(f"❌ Connection Error")
             if attempt < max_retries - 1:
@@ -87,7 +100,7 @@ def get_analysis_with_retry(screener, interval, symbols, max_retries=3, delay=2)
             else:
                 print(f"  ❌ All retries exhausted. Error: {str(e)}")
                 return None
-                
+
         except Exception as e:
             print(f"❌ Error: {type(e).__name__}")
             if attempt < max_retries - 1:
@@ -100,7 +113,7 @@ def get_analysis_with_retry(screener, interval, symbols, max_retries=3, delay=2)
                 import traceback
                 traceback.print_exc()
                 return None
-    
+
     return None
 
 
@@ -397,14 +410,18 @@ def calculate_entry_exit_levels(close_price, indicators, metrics):
     return levels
 
 
-def analyze_btc_daily():
-    """Perform complete daily analysis on BTC/USD"""
-    
+def analyze_btc_daily(symbol="COINBASE:BTCUSD", asset_name="BTC/USD"):
+    """Perform complete daily analysis on any crypto asset
+
+    Args:
+        symbol: TradingView symbol (e.g., "COINBASE:BTCUSD", "COINBASE:ETHUSD")
+        asset_name: Display name for the asset (e.g., "BTC/USD", "ETH/USD")
+    """
+
     print(f"\n{'='*70}")
-    print(f"  BTC/USD DAILY (24HR) ANALYSIS - COINBASE")
+    print(f"  {asset_name} DAILY (24HR) ANALYSIS - COINBASE")
     print(f"{'='*70}\n")
-    
-    symbol = "COINBASE:BTCUSD"
+
     screener = "crypto"
     timeframe = "1D"  # Daily timeframe
     
